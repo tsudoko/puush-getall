@@ -2,10 +2,10 @@
 from urllib.parse import unquote_plus
 from bs4 import BeautifulSoup
 import requests
-import sys
-import os
+import sys, os, re
 
-# TODO: page support (downloads only page1 for now)
+# TODO: less ugly code
+# TODO: fix argument parsing
 
 # downloads all files from your puush account
 # PUUSH_API_KEY environment variable must contain your api key
@@ -43,8 +43,19 @@ def get_files(key, path):
   for p in pools:
     pool = s.get("https://puush.me" + p)
     pool = BeautifulSoup(pool.text)
-    lel = [l['href'] for l in pool.find_all(is_file)]
-    links += lel
+    # get all the file links from the page 1
+    links += [l['href'] for l in pool.find_all(is_file)]
+    page_links = [a['href'] for a in pool.find_all("a", href=re.compile("\?pool=.*&page="))]
+    if page_links:
+      page_links = [a.split('page=')[-1] for a in page_links]
+      last_page = max(page_links)
+      # return a page list without the first page (since we have files from
+      # the first page already)
+      page_links = [p + '&page=' + str(page_num) for page_num in range(2, int(last_page)+1)]
+      for pa in page_links: # XXX
+        page = s.get("https://puush.me" + pa)
+        page = BeautifulSoup(page.text)
+        links += [l['href'] for l in page.find_all(is_file)]
 
   for i in links:
     r = s.head(i)
