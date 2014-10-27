@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+from urllib.parse import unquote_plus
+from bs4 import BeautifulSoup
+import requests
+import sys
+import os
+
+# TODO: page support (downloads only page1 for now)
+
+# downloads all files from your puush account
+# PUUSH_API_KEY environment variable must contain your api key
+
+
+def is_pool(tag):
+  try:
+    return tag["href"][:15] == "/account/?pool="
+  except (KeyError, TypeError):
+    return False
+
+
+def is_file(tag):
+  try:
+    return tag["href"][:14] == "http://puu.sh/"
+  except (KeyError, TypeError):
+    return False
+
+
+def get_files(key, path):
+  s = requests.Session()
+
+  acc = s.get("https://puush.me/login/go/", params={'k': key})
+  acc = BeautifulSoup(acc.text)
+
+  pool_links = acc.find_all(is_pool)
+  pools = []
+  links = []
+
+  for l in pool_links:
+    item_count = int(l.contents[5].contents[0].split('(')[-1].split(')')[0])
+    if item_count > 0:
+      pools.append(l['href'])
+
+  for p in pools:
+    pool = s.get("https://puush.me" + p)
+    pool = BeautifulSoup(pool.text)
+    lel = [l['href'] for l in pool.find_all(is_file)]
+    links += lel
+
+  for i in links:
+    r = s.head(i)
+    namae = i.split('/')[3].split('.')[0]
+    namae += '_'+unquote_plus(r.headers['Content-disposition'].split('"')[-2])
+    filename = os.path.join(path, namae)
+    if not os.path.exists(filename):
+      r = s.get(i, stream=True)
+      with open(filename, "wb") as f:
+        for chunk in r.iter_content(chunk_size=1024):
+          f.write(chunk)
+          f.flush()
+
+
+def argparse():
+  # the key part is safe to remove
+  key  = None
+  path = None
+  for a in sys.argv[1:]:
+    if a[:2] == "-k":
+      if len(a) > 2:
+        if os.path.isfile(a[2:]):
+          key = open(a[2:]).read().strip()
+    elif os.path.isdir(a):
+      path = a
+  return key, path
+
+if __name__ == "__main__":
+  key, path = argparse()
+  if key is None:
+    if "PUUSH_API_KEY" in os.environ:
+      key = os.environ['PUUSH_API_KEY']
+    else:
+      print("api key not given or invalid", file=sys.stderr)
+      exit(1)
+  if path is None:
+    print("no path specified", file=sys.stderr)
+    exit(1)
+  get_files(key, path)
