@@ -5,7 +5,7 @@ import requests
 import sys, os, re
 
 # TODO: less ugly code
-# TODO: fix argument parsing
+# TODO: fix argument parsing or remove it altogether
 
 # downloads all files from your puush account
 # PUUSH_API_KEY environment variable must contain your api key
@@ -25,6 +25,13 @@ def is_file(tag):
     return False
 
 
+def _soup(session, url):
+  if url[0] != '/':
+    url = "/account" + url
+  page = session.get("https://puush.me" + url)
+  return BeautifulSoup(page.text)
+
+
 def get_files(key, path):
   s = requests.Session()
 
@@ -35,27 +42,29 @@ def get_files(key, path):
   pools = []
   links = []
 
+  # regexp to find page links
+  pr = re.compile("\?pool=[0-9]+&page=")
+
+  get_links = lambda l,*v,**k: [a['href'] for a in _soup(s, l).find_all(*v,**k)]
+
   for l in pool_links:
     item_count = int(l.contents[5].contents[0].split('(')[-1].split(')')[0])
     if item_count > 0:
       pools.append(l['href'])
 
   for p in pools:
-    pool = s.get("https://puush.me" + p)
-    pool = BeautifulSoup(pool.text)
     # get all the file links from the page 1
-    links += [l['href'] for l in pool.find_all(is_file)]
-    page_links = [a['href'] for a in pool.find_all("a", href=re.compile("\?pool=.*&page="))]
+    links += get_links(p, is_file)
+    page_links = get_links(p, 'a', href=pr)
     if page_links:
-      page_links = [a.split('page=')[-1] for a in page_links]
+      page_links = [int(a.split('page=')[-1]) for a in page_links]
       last_page = max(page_links)
-      # return a page list without the first page (since we have files from
+      # return the page list without the first page (since we have files from
       # the first page already)
-      page_links = [p + '&page=' + str(page_num) for page_num in range(2, int(last_page)+1)]
-      for pa in page_links: # XXX
-        page = s.get("https://puush.me" + pa)
-        page = BeautifulSoup(page.text)
-        links += [l['href'] for l in page.find_all(is_file)]
+      page_url = p + "&page="
+      page_links = [page_url + str(pnum) for pnum in range(2, last_page+1)]
+      for page in page_links:
+        links += get_links(page, is_file)
 
   for i in links:
     r = s.head(i)
@@ -71,26 +80,20 @@ def get_files(key, path):
 
 
 def argparse():
-  # the key part is safe to remove
-  key  = None
   path = None
   for a in sys.argv[1:]:
-    if a[:2] == "-k":
-      if len(a) > 2:
-        if os.path.isfile(a[2:]):
-          key = open(a[2:]).read().strip()
-    elif os.path.isdir(a):
+    if os.path.isdir(a):
       path = a
-  return key, path
+      break
+  return path
 
 if __name__ == "__main__":
-  key, path = argparse()
-  if key is None:
-    if "PUUSH_API_KEY" in os.environ:
-      key = os.environ['PUUSH_API_KEY']
-    else:
-      print("api key not given or invalid", file=sys.stderr)
-      exit(1)
+  path = argparse()
+  if "PUUSH_API_KEY" in os.environ:
+    key = os.environ['PUUSH_API_KEY']
+  else:
+    print("api key not given or invalid", file=sys.stderr)
+    exit(1)
   if path is None:
     print("no path specified", file=sys.stderr)
     exit(1)
