@@ -69,9 +69,10 @@ def get_files(key, path):
           f.flush()
 
 
-def die(*a, **k):
+def die(*args, **kwargs):
   code = kwargs.pop('code', 1)
-  print(os.path.basename(sys.argv[0]) + ':', *a, file=sys.stderr, **k)
+  print(os.path.basename(sys.argv[0]) + ':', *args, file=sys.stderr, **kwargs)
+  exit(code=code)
 
 
 def argparse():
