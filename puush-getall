@@ -42,6 +42,9 @@ def get_files(key, path):
   pools = []
   links = []
 
+  if not pool_links:
+    die("couldn't retrieve pools", code=2)
+
   # regexp to find page links
   pr = re.compile("\?pool=[0-9]+&page=")
 
@@ -79,6 +82,11 @@ def get_files(key, path):
           f.flush()
 
 
+def die(*a, **k):
+  code = kwargs.pop('code', 1)
+  print(os.path.basename(sys.argv[0]) + ':', *a, file=sys.stderr, **k)
+
+
 def argparse():
   path = None
   for a in sys.argv[1:]:
@@ -92,9 +100,7 @@ if __name__ == "__main__":
   if "PUUSH_API_KEY" in os.environ:
     key = os.environ['PUUSH_API_KEY']
   else:
-    print("api key not given or invalid", file=sys.stderr)
-    exit(1)
+    die("api key not given or invalid")
   if path is None:
-    print("no path specified", file=sys.stderr)
-    exit(1)
+    die("no path specified")
   get_files(key, path)
