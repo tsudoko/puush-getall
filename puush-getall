@@ -11,20 +11,6 @@ import sys, os, re
 # PUUSH_API_KEY environment variable must contain your api key
 
 
-def is_pool(tag):
-  try:
-    return tag["href"][:15] == "/account/?pool="
-  except (KeyError, TypeError):
-    return False
-
-
-def is_file(tag):
-  try:
-    return tag["href"][:14] == "http://puu.sh/"
-  except (KeyError, TypeError):
-    return False
-
-
 def _soup(session, url):
   if url[0] != '/':
     url = "/account" + url
@@ -38,17 +24,18 @@ def get_files(key, path):
   acc = s.get("https://puush.me/login/go/", params={'k': key})
   acc = BeautifulSoup(acc.text)
 
-  pool_links = acc.find_all(is_pool)
+  is_page = re.compile("\?pool=[0-9]+&page=")
+  is_pool = lambda x: x and x.startswith("/account/?pool=")
+  is_file = lambda x: x and x.startswith("http://puu.sh/")
+
+  get_links = lambda l,*v,**k: [a['href'] for a in _soup(s, l).find_all(*v,**k)]
+
+  pool_links = acc.find_all('a', href=is_pool)
   pools = []
   links = []
 
   if not pool_links:
     die("couldn't retrieve pools", code=2)
-
-  # regexp to find page links
-  pr = re.compile("\?pool=[0-9]+&page=")
-
-  get_links = lambda l,*v,**k: [a['href'] for a in _soup(s, l).find_all(*v,**k)]
 
   for l in pool_links:
     item_count = int(l.contents[5].contents[0].split('(')[-1].split(')')[0])
@@ -57,8 +44,8 @@ def get_files(key, path):
 
   for p in pools:
     # get all the file links from the page 1
-    links += get_links(p, is_file)
-    page_links = get_links(p, 'a', href=pr)
+    links += get_links(p, 'a', href=is_file)
+    page_links = get_links(p, 'a', href=is_page)
     if page_links:
       page_links = [int(a.split('page=')[-1]) for a in page_links]
       last_page = max(page_links)
@@ -67,7 +54,7 @@ def get_files(key, path):
       page_url = p + "&page="
       page_links = [page_url + str(pnum) for pnum in range(2, last_page+1)]
       for page in page_links:
-        links += get_links(page, is_file)
+        links += get_links(page, 'a', href=is_file)
 
   for i in links:
     r = s.head(i)
