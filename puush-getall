@@ -5,7 +5,7 @@ import requests
 import sys, os, re
 
 # TODO: less ugly code
-# TODO: fix argument parsing or remove it altogether
+# TODO: use a proper getopt/argparse module or remove argparse() altogether
 
 # downloads all files from your puush account
 # PUUSH_API_KEY environment variable must contain your api key
@@ -43,13 +43,13 @@ def get_files(key, path):
 
   for p in pools:
     ps = soup(s, p)
-    # get all the file links from the page 1
+    # get all file links from the page 1
     links += get_links(ps, 'a', href=is_file)
     page_links = get_links(ps, 'a', href=is_page)
     if page_links:
       page_links = [int(a.split('page=')[-1]) for a in page_links]
       last_page = max(page_links)
-      # return the page list without the first page (since we have files from
+      # return page list without the first page (since we have files from
       # the first page already)
       page_url = p + "&page="
       page_links = [page_url + str(pnum) for pnum in range(2, last_page+1)]
